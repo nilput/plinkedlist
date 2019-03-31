@@ -152,7 +152,7 @@ found:
     bit_idx = 0;
     inv_v = ~ (bitset->data[i]);
     if (inv_v != 0) {
-#ifdef _GNU_C_
+#ifdef _GNUC_
         //Built-in Function: int __builtin_ctz (unsigned int x)
         //Returns the number of trailing 0-bits in x, starting at the least significant bit position. If x is 0, the result is undefined.
         bit_idx = __builtin_ctz(inv_v);
@@ -195,7 +195,7 @@ long bitset_find_true_bit(struct bitset *bitset,  size_t start_at_bit_idx)
 found:
     bit_idx = 0;
     v = bitset->data[i];
-#ifdef _GNU_C_
+#ifdef _GNUC_
     //Built-in Function: int __builtin_ctz (unsigned int x)
     //Returns the number of trailing 0-bits in x, starting at the least significant bit position. If x is 0, the result is undefined.
     bit_idx = __builtin_ctz(v);
