@@ -4,7 +4,11 @@
 #include <string.h>
 #include "util.h"
 
-static void die(const char *msg) {
+#undef USE_MADVISE
+#define USE_MADVISE
+
+
+void die(const char *msg) {
     fprintf(stderr, "%s", msg);
     exit(1);
 }
@@ -13,6 +17,7 @@ void *xmalloc(size_t sz) {
     void *p = malloc(sz);
     if (!p)
         die("xmalloc(): out of mem");
+
     return p;
 }
 
@@ -23,24 +28,28 @@ void *xrealloc(void *m, size_t sz) {
     return p;
 }
 
+void *xfree(void *m) {
+    free(m);
+}
+
 #if CHAR_BIT != 8
     #error "only supports 8 bit byte platforms"
 #endif
 
 #define BITS_IN_UNSIGNED (sizeof(unsigned) * 8)
-#define BITS_ALL_ON_PATTERN UINT_MAX
+#define UNSIGNED_ALL_BITS_ON UINT_MAX
 
 struct idx_pair {
     size_t unsigned_idx;
     int bit_idx;
 };
-struct idx_pair resolve_bit_idx(size_t bit_idx) {
+static struct idx_pair resolve_bit_idx(size_t bit_idx) {
     struct idx_pair idx;
     idx.unsigned_idx = (bit_idx / BITS_IN_UNSIGNED);
     idx.bit_idx = (bit_idx % BITS_IN_UNSIGNED);
     return idx;
 }
-size_t recombine_bit_idx(size_t unsigned_idx, int bit_idx)
+static size_t recombine_bit_idx(size_t unsigned_idx, int bit_idx)
 {
     return (unsigned_idx * BITS_IN_UNSIGNED) + bit_idx;
 }
@@ -87,9 +96,11 @@ void bitset_realloc(struct bitset *bitset, size_t new_bit_len)
 {
     if (!new_bit_len) {
         bitset_deinit(bitset);
+        return;
     }
     if (!bitset->bit_len) {
         bitset_init(bitset, new_bit_len);
+        return;
     }
     struct idx_pair last_idx = resolve_bit_idx(bitset->bit_len - 1);
     last_idx.bit_idx++;
@@ -132,10 +143,10 @@ long bitset_find_false_bit(struct bitset *bitset,  size_t start_at_bit_idx)
     int bit_idx;
     unsigned inv_v;
 
-    if (start_at_bit_idx != 0) {
+    if (start_at_bit_idx != 0 && bitset->data[start_idx.unsigned_idx] != UNSIGNED_ALL_BITS_ON) {
         //check the first skipped unsigned (slow)
         for (i=start_idx.bit_idx; i < BITS_IN_UNSIGNED; i++) {
-            if (unsigned_get_bit(bitset->data + start_idx.unsigned_idx, i))
+            if (!unsigned_get_bit(bitset->data + start_idx.unsigned_idx, i))
                 return recombine_bit_idx(start_idx.unsigned_idx, i);
         }
         start_at++; //skip first unsigned
@@ -143,7 +154,7 @@ long bitset_find_false_bit(struct bitset *bitset,  size_t start_at_bit_idx)
 
     //find an unsigned that is not 0xFFFFFF...
     for (i = start_at; i <= last_idx.unsigned_idx; i++) {
-        if (bitset->data[i] != BITS_ALL_ON_PATTERN) {
+        if (bitset->data[i] != UNSIGNED_ALL_BITS_ON) {
             goto found;
         }
     }
@@ -175,10 +186,10 @@ long bitset_find_true_bit(struct bitset *bitset,  size_t start_at_bit_idx)
     int bit_idx;
     unsigned v;
 
-    if (start_at_bit_idx != 0) {
+    if (start_at_bit_idx != 0 && bitset->data[start_idx.unsigned_idx] != 0) {
         //check the first skipped unsigned, (slow)
         for (i=start_idx.bit_idx; i < BITS_IN_UNSIGNED; i++) {
-            if (!unsigned_get_bit(bitset->data + start_idx.unsigned_idx, i))
+            if (unsigned_get_bit(bitset->data + start_idx.unsigned_idx, i))
                 return recombine_bit_idx(start_idx.unsigned_idx, i);
         }
         start_at++; //skip first unsigned
@@ -208,6 +219,28 @@ found:
     return recombine_bit_idx(i, bit_idx);
 }
 
-void *xfree(void *m) {
-    free(m);
+
+bool argv_get_int(int argc, const char **argv, const char *key, int *out_val, int default_val)
+{
+    for (int i=1; i<argc; i++) {
+        int arglen = strlen(argv[i]);
+        int klen = strlen(key);
+        if (strncmp(key, argv[i], klen) == 0) { //is prefixed by?
+            const char *after = argv[i] + klen;
+            if (*after == '=') after++;
+            else if (*after == ' ') after++;
+            *out_val = atoi(after);
+            if (!(*out_val)) {
+                if (i != (argc - 1)) { //maybe in next arg
+                    *out_val = atoi(argv[i+1]);
+                }
+                if (!(*out_val)) { // nope
+                    *out_val = default_val;
+                }
+            }
+            return true;
+        }
+    }
+    *out_val = default_val;
+    return false;
 }

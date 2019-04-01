@@ -32,24 +32,6 @@ node_idx pll_insert(struct pll_list *list, node_idx at, int value) {
     return tail;
 }
 
-bool argv_has_int(int argc, const char **argv, const char *key, int *out_val, int default_val)
-{
-    for (int i=1; i<argc; i++) {
-        int arglen = strlen(argv[i]);
-        int klen = strlen(key);
-        if (strncmp(key, argv[i], klen) == 0) { //is prefixed by?
-            const char *after = argv[i] + klen;
-            if (*after == '=') after++;
-            else if (*after == ' ') after++;
-            *out_val = atoi(after);
-            if (!(*out_val))
-                *out_val = default_val;
-            return true;
-        }
-    }
-    *out_val = default_val;
-    return false;
-}
 
 int main(int argc, const char **argv) 
 {
@@ -74,7 +56,7 @@ int main(int argc, const char **argv)
     pll_iter_nodes(&list, root);
 
     srand(0);
-    if (argv_has_int(argc, argv, "--rand", &opts.n_rand, 100)) {
+    if (argv_get_int(argc, argv, "--rand", &opts.n_rand, 100)) {
         for (int i=0; i<opts.n_rand; i++) {
             node_idx at;
             if ((rand() % 2) == 0)
